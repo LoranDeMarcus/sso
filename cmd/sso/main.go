@@ -16,6 +16,8 @@ const (
 	envProd  = "prod"
 )
 
+// todo: переписать миграцию isAdmin, создавать отдельную таблицу на админов, а не добавлять isAdmin для каждого пользователя
+
 func main() {
 	cfg := config.MustLoad()
 

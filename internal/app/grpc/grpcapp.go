@@ -25,7 +25,11 @@ func New(log *slog.Logger, authService authgrpc.Auth, port int) *App {
 
 	authgrpc.Register(gRPCServer, authService)
 
-	return &App{log: log, gRPCServer: gRPCServer, port: port}
+	return &App{
+		log:        log,
+		gRPCServer: gRPCServer,
+		port:       port,
+	}
 }
 
 func (a *App) Run() error {

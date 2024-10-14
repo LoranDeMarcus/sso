@@ -15,7 +15,7 @@ import (
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidAppId       = errors.New("invalid app id")
+	ErrInvalidAppID       = errors.New("invalid app id")
 	ErrUserExists         = errors.New("user exists")
 )
 
@@ -28,16 +28,20 @@ type Auth struct {
 }
 
 type UserSaver interface {
-	SaveUser(ctx context.Context, email string, passHash []byte) (uid int64, err error)
+	SaveUser(
+		ctx context.Context,
+		email string,
+		passHash []byte,
+	) (uid int64, err error)
 }
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
-	isAdmin(ctx context.Context, userId int64) (bool, error)
+	IsAdmin(ctx context.Context, userID int64) (bool, error)
 }
 
 type AppProvider interface {
-	App(ctx context.Context, appId int) (models.App, error)
+	App(ctx context.Context, appID int) (models.App, error)
 }
 
 // New returns new instance of the Auth service
@@ -49,9 +53,9 @@ func New(
 	tokenTTL time.Duration,
 ) *Auth {
 	return &Auth{
-		log:          log,
 		userSaver:    userSaver,
 		userProvider: userProvider,
+		log:          log,
 		appProvider:  appProvider,
 		tokenTTL:     tokenTTL,
 	}
@@ -69,6 +73,8 @@ func (a *Auth) Login(
 		slog.String("op", op),
 		slog.String("username", email),
 	)
+
+	log.Info("attempting to login user")
 
 	user, err := a.userProvider.User(ctx, email)
 	if err != nil {
@@ -94,7 +100,7 @@ func (a *Auth) Login(
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	log.Info("user log in successfully")
+	log.Info("user logged in successfully")
 
 	token, err := jwt.NewToken(user, app, a.tokenTTL)
 	if err != nil {
@@ -141,10 +147,8 @@ func (a *Auth) RegisterNewUser(
 
 	return id, nil
 }
-func (a *Auth) IsAdmin(
-	ctx context.Context,
-	userID int64,
-) (bool, error) {
+
+func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	const op = "auth.IsAdmin"
 
 	log := a.log.With(
@@ -154,12 +158,12 @@ func (a *Auth) IsAdmin(
 
 	log.Info("checking if user is admin")
 
-	isAdmin, err := a.userProvider.isAdmin(ctx, userID)
+	isAdmin, err := a.userProvider.IsAdmin(ctx, userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrAppNotFound) {
 			log.Warn("user not found", sl.Err(err))
 
-			return false, fmt.Errorf("%s: %w", op, ErrInvalidAppId)
+			return false, fmt.Errorf("%s: %w", op, ErrInvalidAppID)
 		}
 
 		return false, fmt.Errorf("%s: %w", op, err)

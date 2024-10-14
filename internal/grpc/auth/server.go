@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	ssov1 "github.com/LoranDeMarcus/protos/gen/go/sso"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"sso/internal/services/auth"
 )
 
 type Auth interface {
@@ -13,16 +15,16 @@ type Auth interface {
 		ctx context.Context,
 		email string,
 		password string,
-		appId int,
+		appID int,
 	) (token string, err error)
 	RegisterNewUser(
 		ctx context.Context,
 		email string,
 		password string,
-	) (userId int64, err error)
-	isAdmin(
+	) (userID int64, err error)
+	IsAdmin(
 		ctx context.Context,
-		userId int64,
+		userID int64,
 	) (bool, error)
 }
 
@@ -42,6 +44,10 @@ func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 
 	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), int(req.GetAppId()))
 	if err != nil {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			return nil, status.Error(codes.InvalidArgument, "internal error")
+		}
+
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
@@ -53,21 +59,29 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		return nil, err
 	}
 
-	userId, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
+	userID, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
-		return nil, status.Error(codes.Internal, "internal error")
+		if errors.Is(err, auth.ErrUserExists) {
+			return nil, status.Error(codes.AlreadyExists, "user already exists")
+		}
+
+		return nil, status.Error(codes.Internal, "user already exists")
 	}
 
-	return &ssov1.RegisterResponse{UserId: userId}, nil
+	return &ssov1.RegisterResponse{UserId: userID}, nil
 }
 
-func (s *serverAPI) isAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ssov1.IsAdminResponse, error) {
+func (s *serverAPI) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ssov1.IsAdminResponse, error) {
 	if err := ValidateIsAdmin(req); err != nil {
 		return nil, err
 	}
 
-	isAdmin, err := s.auth.isAdmin(ctx, req.GetUserId())
+	isAdmin, err := s.auth.IsAdmin(ctx, req.GetUserId())
 	if err != nil {
+		if errors.Is(err, auth.ErrInvalidAppID) {
+			return nil, status.Error(codes.NotFound, "user not found")
+		}
+
 		return nil, status.Error(codes.Internal, "error")
 	}
 
